@@ -1,0 +1,351 @@
+---
+  title: "Práctica 2: Limpieza y análisis de datos"
+  author: "Maite Gracia"
+  date: '`r format(Sys.Date(),"%e de %B, %Y")`'
+  output:
+    pdf_document:
+      toc: yes
+      number_sections: yes
+    html_document:
+      highlight: default
+      number_sections: yes
+      theme: cosmo
+      toc: yes
+      toc_depth: 2
+---
+\newpage
+
+# Descripción del dataset
+
+Se ha decidido utilizar un dataset de la web Kaggle para la presente práctica. **[enlace]**(https://www.kaggle.com/kemical/kickstarter-projects)
+8 de la web Kickstarter. Kickstarter es una plataforma de micro mecenazgo, es decir, gente de todo el mundo ayuda a financiar las ideas y proyectos de pequeñas empresas o particulares.
+
+En la web de Kickstarter se pueden encontrar miles de campañas que buscan financiación para desarrollar productos de todo tipo. Desde películas independientes, a juegos de mesa o ropa, peluches, libros etc. Cada una de estas campañas tendrá un periodo de tiempo en el que cualquiera podrá aportar dinero al proyecto y si se consigue llegar al límite de dinero requerido la campaña será fundada.
+
+Yo personalmente utilicé Kickstarter hace unos años para lanzar una serie de productos lo cual es una de las razones por las que he elegido el presente dataset. El objetivo principal sería poder crear un modelo que predijera que probabilidad tiene cualquier tipo de producto de conseguir recaudar dinero mediante una campaña de Kickstarter antes de ser lanzado.  
+
+# Integración y selección de los datos de interés a analizar
+
+Las variables que componen el dataset son:
+
+-	ID: identificador interno de Kickstarter
+-	name: nombre del proyecto
+-	category: categoría específica en la que se encuentra el proyecto
+-	main_category: categoría principal de la campaña
+-	currency: divisa en la que se creó  el proyecto
+-	deadline: fecha límite
+-	goal: cantidad de dinero que el creador necesita para completar el proyecto
+-	launched: fecha lanzamiento
+-	pledged: cantidad total aportada al proyecto
+-	state: condición en la que se encuentra el Proyecto (failed, successful, canceled, live, undefined)
+-	backers: total de mecenas.
+-	country: país en el que se encuentra el Proyecto.
+-	usd_pledged: conversión en dólares de la columna pledged hecha por Kickstarter
+-	usd_pledged_real: conversión en dólares de la columna pledged hecha a través de Fixer.io API
+-	usd_goal_real: conversión en dólares de la columna goal hecha a través de Fixer.io API
+
+Antes de cargar el archivo en R se hace una inspección de los datos. Al tratarse de un archivo con extensión .csv, hay que cerciorarse del tipo de separador utilizado (en este caso la ",") y posteriormente se procede a su carga teniendo en cuenta el separador antes mencionado:  
+
+```{r, message=FALSE, warning=FALSE}
+# Asignamos los datos del fichero cargado a una variable denominada dataSet
+dataSet <- read.csv('../data/ks-projects-201801.csv')
+nrow(dataSet)
+names(dataSet)
+```
+
+Vemos que el dataset original se compone de 378,661 muestras y 13 variables. Ya que se trata de una cantidad de muestras muy elevadas, se ha decidido aplicar una técnica para reducir la cantidad de estas, se empleará la técnica de muestreo aleatorio simple sin sustitución, es decir, se van a extraer 3000 muestras aleatorias del conjunto de datos, donde la probabilidad de escoger cada una de las muestras será la misma para todas, 1/378,661.
+
+Para ello generaremos un fichero al que llamaremos sample_ks.csv que contendrá las 3000 muestras.
+
+```{r}
+library(sampling)
+indices <- sample( 1:nrow( dataSet ), 3000 )
+dataSet <- dataSet[ indices, ]
+```
+
+A partir de ahora cuando se haga referencia al dataset, estaremos hablando del dataset que cotiene las 3000 muestras, no el dataset original.  
+
+# Limpieza de los datos
+
+```{r, message=FALSE, warning=FALSE}
+# Muestra de las 5 primeras líneas del dataset completo
+head(dataSet, 5)
+
+# Análisis descriptivo del dataset
+summary(dataSet)
+
+# Comprobamos si hay NA en el dataset original
+sapply(dataSet, function(x) sum(is.na(x)))
+```
+
+## Normalización de los datos
+
+Basándonos en la estadística descriptiva de la muestra y en la descripción de cada variable podemos ver que todas las variables menos ID son de tipo carácter. Para poder analizar de forma eficaz los datos haremos las siguientes conversiones:  
+
+- Variables category, main_category, currency y country van a convertirse a tipo factor para poder agrupar proyectos.  
+
+```{r, message=FALSE, warning=FALSE}
+dataSet$category <- as.factor(dataSet$category)
+dataSet$main_category <- as.factor(dataSet$main_category)
+dataSet$currency <- as.factor(dataSet$currency)
+dataSet$country <- as.factor(dataSet$country)
+
+# Valores que toman las variables currency y country
+unique(dataSet$currency)
+unique(dataSet$country)
+```
+
+Vemos que country tiene un carácter especial en algunos de los casos, vamos a sustituirlos por NA y más adelante imputaremos estos valores basándonos en la variable currency.  
+
+```{r, message=FALSE, warning=FALSE}
+dataSet$country[dataSet$country == 'N,0"'] <- NA
+```
+
+- Las variables deadline y launched se convertirán a tipo Date.  
+
+```{r, message=FALSE, warning=FALSE}
+dataSet$deadline <- as.Date(dataSet$deadline, '%Y-%m-%d')
+dataSet$launched <- as.Date(dataSet$launched, '%Y-%m-%d')
+```
+
+- goal, pledged y usd.pledged van a pasar a ser tipo numérico.  
+
+```{r, message=FALSE, warning=FALSE}
+dataSet$goal <- as.numeric(dataSet$goal)
+dataSet$pledged <- as.numeric(dataSet$pledged)
+dataSet$usd_pledged <- as.numeric(dataSet$usd_pledged)
+dataSet$usd_pledged_real <- as.numeric(dataSet$usd_pledged_real)
+dataSet$usd_goal_real <- as.numeric(dataSet$usd_goal_real)
+```
+
+- La variable state, como ya se ha explicado, detalla el estado en el que acabó o estaba en ese momento la campaña. Vemos que hay 5 estados failed, successful, canceled, suspended y undefined. Ya que undefined no está detallado que significa, se ha decidido añadir una nueva columna status, que contendrá dos valores, 0 si el proyecto no ha sido fundado y 1 si el proyecto ha recaudado los fondos suficientes.  
+
+```{r, message=FALSE, warning=FALSE}
+dataSet['status'] <- as.factor(ifelse(dataSet$pledged > dataSet$goal, 1, 0))
+```
+
+- Se va a añadir una columna nueva euros_pledged que contendrá la conversión de usd_pledged_real a euros. Se utilizará la conversión 1€ = 1.23$ a 19 de diciembre.
+
+```{r, message=FALSE, warning=FALSE}
+dataSet['euros_pledged'] <- as.numeric(
+  format(as.numeric(dataSet$usd_pledged_real)/1.23), nsmall = 1)
+```
+
+- Se va a añadir una columna nueva proyect_length de tipo numérico, que contendrá el total de días que el proyecto ha estado abierto a financiación. Esta nueva columna será resultado de la diferencia entre la columna deadline y launched.
+
+```{r, message=FALSE, warning=FALSE}
+dataSet['proyect_length'] <- as.numeric(dataSet$deadline - dataSet$launched)
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Muestra set de datos
+head(dataSet, 5)
+summary(dataSet)
+```
+
+## Valores atípicos
+
+Volviendo a la estadística descriptiva vemos que la diferencia entre la media y el máximo y mínimo valor de muestras de la variable pledged y proyect_length es bastante significativa, lo que puede indicar la presencia de outliers. Vamos a comprobar si tenemos outliers mediante diagrama de cajas.  
+
+```{r, message=FALSE, warning=FALSE}
+# Importamos la librería ggplot2
+library(ggplot2)
+
+# Diagrama de cajas para la variable pledged y proyect_length
+boxplot(dataSet$pledged, main="Box plot", col="gray")
+boxplot(dataSet$proyect_length, main="Box plot", col="gray")
+```
+
+Vemos que ambas variables tienen valores extremos por lo que vamos a analizar para determinar cómo proceder con ellos.  
+
+```{r, message=FALSE, warning=FALSE}
+tail(sort(dataSet$pledged), 10)
+tail(sort(dataSet$proyect_length), 10)
+```
+
+Vemos que hay bastante diferencia entre la media de la variable pledged y los valores más altos, pero haciendo un poco de investigación online se ha encontrado que algún proyecto ha llegado a recaudar más de 20,000,000\$, **[enlace]**(https://www.marketwatch.com/story/10-kickstarter-products-that-raised-the-most-money-2017-06-22-10883052). Por este motivo se ha decidido aceptar dichos outliers y tratarlos como datos válidos.
+
+Por otro lado, para la variable proyect_length vemos que el valor máximo de esta son 16,739 días, lo que corresponde a más de 3 años, implicaría que un proyecto ha estado recaudando fondos durante todo ese tiempo. Haciendo un poco de investigación sobre la normativa de Kickstarter, se ha encontrado **[enlace]**(https://help.kickstarter.com/hc/en-us/articles/115005128434-What-is-the-maximum-project-duration-#:~:text=Projects%20on%20Kickstarter%20can%20last,at%2030%20days%20or%20less.) que, hoy en día, la duración máxima por proyecto es de 60 días. También en este otro artículo de explica que hasta el año 2011 la duración máxima era de 90 días **[enlace]**(https://www.kickstarter.com/blog/shortening-the-maximum-project-length).  
+
+```{r, message=FALSE, warning=FALSE}
+outliersDays <- tail(sort(dataSet$proyect_length), 7)
+outliersDays
+indexes <- which(dataSet$proyect_length %in% outliersDays)
+indexes
+dataSet$launched[indexes]
+```
+
+Al comprobar el valor launchdate para cada una de las muestras en las que se encontraban los outliers vemos que la fecha es 1970-01-01 01:00:00, se han recogido mal al guardar los datos, de ahí que salgan valores tan extremos para proyect_length.
+
+Por todo ello se ha decidido que cualquier duración significativamente mayor de 90 días se va a tratar como outlier y se reemplazará por NA para posteriormente imputarlo con un valor de 90.
+
+```{r, message=FALSE, warning=FALSE}
+# Se reemplazan los valores en las posiciones indexes por NA
+dataSet$proyect_length[indexes] <- NA
+```
+
+Muestra de todos las variables y sus valores NA's.  
+
+```{r, message=FALSE, warning=FALSE}
+# Comprobamos si quedan NA's
+sapply(dataSet, function(x) sum(is.na(x)))
+```
+
+## Imputación de valores 
+
+- Cómo se ha mencionado anteriormente los valores NA de la variable proyect_length se van a reemplazar por 90 ya que es el máximo número de días que un proyecto puede estar recaudando dinero.  
+
+```{r, message=FALSE, warning=FALSE}
+dataSet$proyect_length[indexes] <- 90
+```
+
+- Imputación de valores perdidos para la variable country.  
+
+```{r, message=FALSE, warning=FALSE}
+idx <- which(is.na(dataSet$country))
+# encontrar las combinaciones únicas de country y currency pero no cuando country
+# es NA
+uniques <- unique(dataSet[c('country', 'currency')])
+uniques <- uniques[!is.na(uniques$country),]
+
+# reemplazar los NA's de country con los valores únicos asociados con currency
+na.country <- which(is.na(dataSet$country))
+na.currency <- dataSet$currency[na.country]
+dataSet$country[idx] <- uniques$country[match(na.currency, uniques$currency)]
+```
+
+Por último comprobamos si quedan NA's en los datos.  
+
+```{r, message=FALSE, warning=FALSE}
+# Comprobamos si quedan NAs
+sapply(dataSet, function(x) sum(is.na(x)))
+```
+
+## Selección de datos
+
+A continuación, vamos a detallar que atributos hemos descartado y cuales hemos decidido sean imprescindibles para el análisis:  
+
+- Se ha decidido borrar del dataset la columna de usd_pledged, esta representa la conversión a dolares por parte de Kickstarter del atributo pledged, pero se han descubierto bastantes inconsistencias. El creador del dataset, por este mismo motivo, decidió incluir un nuevo atributo con una conversión más precisa de pledged, que es la que vamos a usar.
+
+- También se ha decidido descartar la variable usd_goal_pledged porque no resulta significativa para el estudio.
+
+- Por otro lado, vamos a prescindir de la variable state. Como se ha mencionado anteriormente, un Kickstarter es satisfactorio si el proyecto consigue recaudar el dinero marcado como objetivo en el tiempo estimado, por lo que no es necesario para nuestro estudio si dicho proyecto se ha cancelado, o se ha suspendido o sigue activo. Se puede dar el caso por ejemplo que un proyecto llegue al objetivo económico marcado dentro de tiempo, pero el organizador, por cualquier motivo decida suspenderlo. En ese caso el proyecto aparecerá como cancelado, pero desde el punto de vista del objetivo del proyecto, la recaudación ha sido satisfactoria.
+
+```{r, message=FALSE, warning=FALSE}
+# Quitar columnas usd_pledged y usd_goal_pledged del daataset
+drops <- c('usd.pledged', 'usd_goal_pledged', 'state')
+dataSet <- dataSet[ , !(names(dataSet) %in% drops)]
+# Anális descriptivo del dataset limpio
+summary(dataSet)
+```
+
+## Exportación de los datos limpios
+
+Una vez el procesado de los datos ha finalizado, se genera un archivo csv con nombre “ks-projects-201801_clean.csv”, que contendrá el dataset con 3000 muestras limpias.  
+
+```{r, message=FALSE, warning=FALSE}
+# Exportación de los datos limpios en .csv
+write.csv(dataSet, '../data/ks-projects-201801_sample_clean.csv')
+```
+
+# Análisis de los datos
+
+## Selección de los grupos de datos a analizar
+
+De todo el conjunto de datos, se han seleccionado los siguientes atributos para poder ser analizados creyendo que son estos los que aportarán más valor al análisis posterior:  
+
+- main_category: recoge las 15 principales categorías presentes.  
+
+```{r, message=FALSE, warning=FALSE}
+unique(dataSet$main_category)
+```
+
+- proyect_length: tiempo de duración de cada proyecto, expresado en días.  
+
+- euros_pledged: conversión a € de la variable usd_pledged_real.
+
+- country: país en el que se publicó el proyecto Kickstarter. La variable currency representa la moneda de dicho país por lo que nos resulta redundante.
+
+- backers: cantidad total de mecenas del proyecto.
+
+- status: estado del proyecto, 0 no ha conseguido el objetivo, 1 si lo ha conseguido.
+
+## Normalidad y homocedasticidad
+
+A la hora de identificar los métodos de análisis más adecuados se debe conocer antes las características de los datos, por ejemplo, si estos siguen una distribución normal o si presentan homocedasticidad. Por ello vamos a comprobar que las variables numéricas elegidas siguen una distribución normal o presentan homogeneidad de la varianza.  
+
+- Test de normalidad
+
+Se va a utilizar el test Shapiro-Wilk, asumiendo un intervalo de confianza del 95%. Esto quiere decir que si el p-valor es menor o igual que el nivel de significancia con un valor de 0.05, entonces podemos rechazar la presunción de normalidad, es decir, la variable no sigue una distribución normal.  
+
+```{r, message=FALSE, warning=FALSE}
+shapiro.test(dataSet$proyect_length)
+shapiro.test(dataSet$euros_pledged)
+shapiro.test(dataSet$backers)
+
+# Representación de la distribución
+par(mfrow=c(2,2))
+qqnorm(dataSet$proyect_length)
+qqnorm(dataSet$euros_pledged)
+qqnorm(dataSet$backers)
+```
+
+Se puede apreciar que los datos no siguen una distribución normal ya que en el total de las comprobaciones el p-valor del Test de Shapiro-Wilk el p-value < 2.2e-16 rechazando dicha distribución normal.  
+
+- Test de homocedasticidad
+
+Ya que hemos comprobado que nuestros datos no siguen una distribución normal (p-value < 2.2e-16 en todos los casos), para el test de homocedasticidad tendremos utilizaremos el de Fligner-Killeen. La hipótesis nula asume la igualdad de varianzas, por lo que p-values inferiores al nivel de significancia (0.05), indicarán heterocedasticidad.
+
+Para ello comprobaremos distintos grupos de datos entre sí:  
+
+```{r, message=FALSE, warning=FALSE}
+fligner.test(dataSet$proyect_length ~ dataSet$euros_pledged, data = dataSet)
+fligner.test(dataSet$euros_pledged ~ dataSet$backers, data = dataSet)
+fligner.test(dataSet$proyect_length ~ dataSet$backers, data = dataSet)
+```
+
+De este análisis podemos observar dos casos, para las variables proyect_length-euros_pledged y proyect_length-backers el test de Fligner-Killen da un p-value mayor que 0.05 (1 y 0.942 respectivamente), por lo que se asume homocedasticidad.
+
+Por otro lado, la prueba para euros_pledged y backers se resuelve con un p-value < 2.2e-16, por lo que en este caso si se puede rechazar la hipótesis nula de homocedasticidad y se concluye que la variable euros_pledged presenta varianzas estadísticamente diferentes para los diferentes grupos de backers.  
+
+## Pruebas estadísticas
+
+Ya hemos comprobado anteriormente que las variables no siguen la distribución normal por lo para el contraste de hipótesis deberemos aplicar pruebas no paramétricas como Wilcoxon o Mann-Whitney.  
+
+**TBC**
+
+### Contraste de hipótesis de dos muestras
+
+**TBC**
+
+### Modelo de regresión lineal muúltiple
+
+**TBC**
+
+### Modelo de regresión logística
+
+**TBC**
+
+# Representación de los resultados
+
+**TBC**
+
+# Conclusiones
+
+**TBC**
+
+
+# Agradecimientos
+
+En primer lugar, agradecer y reconocer el trabajo de Mickaël Mouillé **[enalce]**(https://www.kaggle.com/kemical), creador del dataset por trabajo para recolectar datos durante tantos años y publicarlos para el uso público.
+
+También agradecer a todas aquellas personas que han publicado sus dudas sobre el dataset para beneficio de todos.
+
+# Tabla de contribuciones
+
+| Contribuciones               |      Firma    |
+|------------------------------|:-------------:|
+| Investigación previa         |      M.G.     |
+| Redacción de las respuestas  |      M.G.     |
+| Desarrollo código            |      M.G.     |
+
