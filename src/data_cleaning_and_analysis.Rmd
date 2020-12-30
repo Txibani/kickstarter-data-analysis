@@ -5,17 +5,18 @@
   output:
     pdf_document:
       toc: yes
+      toc_depth: 4
       number_sections: yes
     html_document:
       highlight: default
       number_sections: yes
       theme: cosmo
       toc: yes
-      toc_depth: 2
+      toc_depth: 4
 ---
 \newpage
 
-# Descripción del dataset
+# Descripción del dataset  
 
 Se ha decidido utilizar un dataset de la web Kaggle para la presente práctica. **[enlace]**(https://www.kaggle.com/kemical/kickstarter-projects)
 8 de la web Kickstarter. Kickstarter es una plataforma de micro mecenazgo, es decir, gente de todo el mundo ayuda a financiar las ideas y proyectos de pequeñas empresas o particulares.
@@ -24,7 +25,7 @@ En la web de Kickstarter se pueden encontrar miles de campañas que buscan finan
 
 Yo personalmente utilicé Kickstarter hace unos años para lanzar una serie de productos lo cual es una de las razones por las que he elegido el presente dataset. El objetivo principal sería poder crear un modelo que predijera que probabilidad tiene cualquier tipo de producto de conseguir recaudar dinero mediante una campaña de Kickstarter antes de ser lanzado.  
 
-# Integración y selección de los datos de interés a analizar
+# Integración y selección de los datos de interés a analizar  
 
 Las variables que componen el dataset son:
 
@@ -65,7 +66,7 @@ dataSet <- dataSet[ indices, ]
 
 A partir de ahora cuando se haga referencia al dataset, estaremos hablando del dataset que cotiene las 3000 muestras, no el dataset original.  
 
-# Limpieza de los datos
+# Limpieza de los datos  
 
 ```{r, message=FALSE, warning=FALSE}
 # Muestra de las 5 primeras líneas del dataset completo
@@ -78,7 +79,7 @@ summary(dataSet)
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
 
-## Normalización de los datos
+## Normalización de los datos  
 
 Basándonos en la estadística descriptiva de la muestra y en la descripción de cada variable podemos ver que todas las variables menos ID son de tipo carácter. Para poder analizar de forma eficaz los datos haremos las siguientes conversiones:  
 
@@ -131,6 +132,13 @@ dataSet['euros_pledged'] <- as.numeric(
   format(as.numeric(dataSet$usd_pledged_real)/1.23), nsmall = 1)
 ```
 
+- Se va a añadir una columna nueva euros_goal que contendrá la conversión de goal a euros. Se utilizará la conversión 1€ = 1.23$ a 19 de diciembre.
+
+```{r, message=FALSE, warning=FALSE}
+dataSet['euros_goal'] <- round(as.numeric(
+  format(as.numeric(dataSet$goal)/1.23), nsmall = 1), 2)
+```
+
 - Se va a añadir una columna nueva proyect_length de tipo numérico, que contendrá el total de días que el proyecto ha estado abierto a financiación. Esta nueva columna será resultado de la diferencia entre la columna deadline y launched.
 
 ```{r, message=FALSE, warning=FALSE}
@@ -143,7 +151,7 @@ head(dataSet, 5)
 summary(dataSet)
 ```
 
-## Valores atípicos
+## Valores atípicos  
 
 Volviendo a la estadística descriptiva vemos que la diferencia entre la media y el máximo y mínimo valor de muestras de la variable pledged y proyect_length es bastante significativa, lo que puede indicar la presencia de outliers. Vamos a comprobar si tenemos outliers mediante diagrama de cajas.  
 
@@ -191,7 +199,7 @@ Muestra de todos las variables y sus valores NA's.
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
 
-## Imputación de valores 
+## Imputación de valores  
 
 - Cómo se ha mencionado anteriormente los valores NA de la variable proyect_length se van a reemplazar por 90 ya que es el máximo número de días que un proyecto puede estar recaudando dinero.  
 
@@ -221,11 +229,11 @@ Por último comprobamos si quedan NA's en los datos.
 sapply(dataSet, function(x) sum(is.na(x)))
 ```
 
-## Selección de datos
+## Selección de datos  
 
 A continuación, vamos a detallar que atributos hemos descartado y cuales hemos decidido sean imprescindibles para el análisis:  
 
-- Se ha decidido borrar del dataset la columna de usd_pledged, esta representa la conversión a dolares por parte de Kickstarter del atributo pledged, pero se han descubierto bastantes inconsistencias. El creador del dataset, por este mismo motivo, decidió incluir un nuevo atributo con una conversión más precisa de pledged, que es la que vamos a usar.
+- Se ha decidido borrar del dataset la columna de usd_pledged, esta representa la conversión a dólares por parte de Kickstarter del atributo pledged, pero se han descubierto bastantes inconsistencias. El creador del dataset, por este mismo motivo, decidió incluir un nuevo atributo con una conversión más precisa de pledged, que es la que vamos a usar.
 
 - También se ha decidido descartar la variable usd_goal_pledged porque no resulta significativa para el estudio.
 
@@ -239,25 +247,28 @@ dataSet <- dataSet[ , !(names(dataSet) %in% drops)]
 summary(dataSet)
 ```
 
-## Exportación de los datos limpios
+## Exportación de los datos limpios  
 
 Una vez el procesado de los datos ha finalizado, se genera un archivo csv con nombre “ks-projects-201801_clean.csv”, que contendrá el dataset con 3000 muestras limpias.  
 
 ```{r, message=FALSE, warning=FALSE}
 # Exportación de los datos limpios en .csv
-write.csv(dataSet, '../data/ks-projects-201801_sample_clean.csv')
+# write.csv(dataSet, '../data/ks-projects-201801_sample_clean.csv')
+
+dataSet <- read.csv('../data/ks-projects-201801_sample_clean.csv')
+attach(dataSet)
 ```
 
-# Análisis de los datos
+# Análisis de los datos  
 
-## Selección de los grupos de datos a analizar
+## Selección de los grupos de datos a analizar  
 
 De todo el conjunto de datos, se han seleccionado los siguientes atributos para poder ser analizados creyendo que son estos los que aportarán más valor al análisis posterior:  
 
 - main_category: recoge las 15 principales categorías presentes.  
 
 ```{r, message=FALSE, warning=FALSE}
-unique(dataSet$main_category)
+unique(main_category)
 ```
 
 - proyect_length: tiempo de duración de cada proyecto, expresado en días.  
@@ -270,7 +281,7 @@ unique(dataSet$main_category)
 
 - status: estado del proyecto, 0 no ha conseguido el objetivo, 1 si lo ha conseguido.
 
-## Normalidad y homocedasticidad
+## Normalidad y homocedasticidad  
 
 A la hora de identificar los métodos de análisis más adecuados se debe conocer antes las características de los datos, por ejemplo, si estos siguen una distribución normal o si presentan homocedasticidad. Por ello vamos a comprobar que las variables numéricas elegidas siguen una distribución normal o presentan homogeneidad de la varianza.  
 
@@ -279,15 +290,15 @@ A la hora de identificar los métodos de análisis más adecuados se debe conoce
 Se va a utilizar el test Shapiro-Wilk, asumiendo un intervalo de confianza del 95%. Esto quiere decir que si el p-valor es menor o igual que el nivel de significancia con un valor de 0.05, entonces podemos rechazar la presunción de normalidad, es decir, la variable no sigue una distribución normal.  
 
 ```{r, message=FALSE, warning=FALSE}
-shapiro.test(dataSet$proyect_length)
-shapiro.test(dataSet$euros_pledged)
-shapiro.test(dataSet$backers)
+shapiro.test(proyect_length)
+shapiro.test(euros_pledged)
+shapiro.test(backers)
 
 # Representación de la distribución
 par(mfrow=c(2,2))
-qqnorm(dataSet$proyect_length)
-qqnorm(dataSet$euros_pledged)
-qqnorm(dataSet$backers)
+qqnorm(proyect_length)
+qqnorm(euros_pledged)
+qqnorm(backers)
 ```
 
 Se puede apreciar que los datos no siguen una distribución normal ya que en el total de las comprobaciones el p-valor del Test de Shapiro-Wilk el p-value < 2.2e-16 rechazando dicha distribución normal.  
@@ -299,49 +310,200 @@ Ya que hemos comprobado que nuestros datos no siguen una distribución normal (p
 Para ello comprobaremos distintos grupos de datos entre sí:  
 
 ```{r, message=FALSE, warning=FALSE}
-fligner.test(dataSet$proyect_length ~ dataSet$euros_pledged, data = dataSet)
-fligner.test(dataSet$euros_pledged ~ dataSet$backers, data = dataSet)
-fligner.test(dataSet$proyect_length ~ dataSet$backers, data = dataSet)
+fligner.test(proyect_length ~ euros_pledged, data = dataSet)
+fligner.test(euros_pledged ~ backers, data = dataSet)
+fligner.test(proyect_length ~ backers, data = dataSet)
 ```
 
 De este análisis podemos observar dos casos, para las variables proyect_length-euros_pledged y proyect_length-backers el test de Fligner-Killen da un p-value mayor que 0.05 (1 y 0.942 respectivamente), por lo que se asume homocedasticidad.
 
 Por otro lado, la prueba para euros_pledged y backers se resuelve con un p-value < 2.2e-16, por lo que en este caso si se puede rechazar la hipótesis nula de homocedasticidad y se concluye que la variable euros_pledged presenta varianzas estadísticamente diferentes para los diferentes grupos de backers.  
 
-## Pruebas estadísticas
+## Pruebas estadísticas  
 
-Ya hemos comprobado anteriormente que las variables no siguen la distribución normal por lo para el contraste de hipótesis deberemos aplicar pruebas no paramétricas como Wilcoxon o Mann-Whitney.  
+### Contraste de hipótesis de dos muestras  
 
-**TBC**
+Para comprobar si existe relación entre las variables status y main_category, es decir, proyecto fundado exitosamente y tipo categoría vamos a aplicar el test no paramétrico khi cuadrado mediante la función chist.test().
 
-### Contraste de hipótesis de dos muestras
+Las hipótesis nula y alternativa quedarían de la siguiente manera:
 
-**TBC**
+- Hipótesis nula, H0: el éxito del proyecto y la categoría en la que se encuentre son variables independientes.
 
-### Modelo de regresión lineal muúltiple
+- Hipótesis alternativa, H1: existe relación entre la categoría en la que se encuentra un proyecto y el éxito de este.
 
-**TBC**
+```{r}
+chisqTable <- table( status, main_category )
+chisq.test(chisqTable, correct=FALSE)
+```
 
-### Modelo de regresión logística
+Vemos que el p-value resultante del test es < 2.2e-16 por lo que podemos rechazar la hipótesis nula y afirmar, con un 95% de confianza que existe relación significativa entre la categoría en la que se encuentra un proyecto y su éxito o no.
 
-**TBC**
+### Modelo regresión logística simple  
 
-# Representación de los resultados
+En este primero modelo de regresión logística simple se quiere analizar la probabilidad de que un proyecto consiga recaudar los fondos propuestos en base a la longitud establecida.
 
-**TBC**
+Como se ha comentado anteriormente, Kickstarter decidió disminuir la duración máxima de los proyectos a 60 días y de hecho recomiendan configurar la campaña para que dure 30 días o menos, ya que la probabilidad de éxito disminuye conforme se alarga el proyecto. Es por ello por lo que queremos comprobar si esto es cierto mediante este modelo. 
 
-# Conclusiones
+```{r, message=FALSE, warning=FALSE}
+# Ajuste de un modelo logístico
+modelLogisticSimple <- glm(status ~ proyect_length, family = "binomial")
+summary(modelLogisticSimple)
+confint(object = modelLogisticSimple, level = 0.95 )
+```
 
-**TBC**
+#### Predicciones  
+
+Vamos a comparar probabilidad de que un proyecto sea exitoso cuando la duración de este es de 25 días y cuando es de 45 días y 60 días. 
+
+```{r, message=FALSE, warning=FALSE}
+# Predicción para 25 días
+round(predict(modelLogisticSimple, data.frame(proyect_length = 25), type="response"), 2)
+# Predicción para 45 días
+round(predict(modelLogisticSimple, data.frame(proyect_length = 45), type="response"), 2)
+# Predicción para 60 días
+round(predict(modelLogisticSimple, data.frame(proyect_length = 60), type="response"), 2)
+```
+
+Podemos dar por cierto la afirmación de que a maa2ás largo el proyecto menos probabilidad de éxito hay ya que hemos obtenido que, para los proyectos de 25 días hay un 39% de probabilidad, para los de 45 días un 30% y para los de 60 días un 23%, se aprecia la tendencia a la baja.  
+
+### Modelo de regresión logística múltiple  
+
+Vamos a crear un primer modelo predictivo de regresión logística para predecir la expectativa de que un proyecto sea exitoso antes de lanzarlo. Para ello tendremos como variable respuesta status, y como variables explicativas usaremos: main_category, proyect_length, backers y euros_goal.
+
+Vamos a especificar el nivel base de referencia para la variable cualitativa:
+
+- Para la variable main_category, la categoría 'Dance'.
 
 
-# Agradecimientos
+```{r, message=FALSE, warning=FALSE}
+status <- as.factor(status)
+main_category <- as.factor(main_category)
+class(euros_goal)
+
+# Nivel de referencia
+main_category <- relevel(main_category, ref = 'Dance')
+
+modelLogistic = glm(formula = status ~ main_category + proyect_length +
+                    backers + euros_goal, family = binomial(link = logit))
+summary(modelLogistic)
+
+# Odds Ratio
+exp(coefficients(modelLogistic))
+exp(confint.default(modelLogistic, level = 0.95))
+```
+
+Observando el sumario del modelo podemos decir que las variables backers, proyect_length y euros_goal son significativas al tener p-values menores que el nivel de significancia 0.05 (< 2e-16 y 2.47e-08 respectivamente). La variable proyect_length, como ya sabíamos afecta de forma negativa al éxito del proyecto. Por otra parte, la variable backers afecta a al éxito del proyecto de manera positiva 0.0469. La variable euros_goal (objetivo económico marcado al que se tiene que llegar antes de que se termine la campaña), afecta de forma negativa a razón de 0.0002. 
+
+En cuanto a la variable main_category, hemos definido antes que el nivel de referencia es 'Dance', si nos fijamos en los OR (odds-ratio) vemos que para el resto las categorías el OR está por debajo de la unidad, lo que indica que es menos probable que un proyecto sea éxitos si pertenece a cualquier otra categoría que si pertenece a Dance.
+
+Cuanto más se aleja el valor del odds-ratio de la unidad, más fuerte es la relación entre la variable dependiente e independiente, por ello vemos que los más alejados de la unidad corresponden a categoría Games (0.038). Si calculamos la inversa tenemos que para Technology 1/0.038 = 26.31, esto se podría interpretar como, si el proyecto pertenece a la categoría Dance, los odds de éxito son 26.31 veces mayor que si pertenece a la categoría Games.
+
+Basándonos en el intervalo de confianza de las tres variables independientes podemos decir que la que más impacto tiene sobre el éxito del proyecto es main_category, es decir, la categoría en la que encuentra el proyecto. Y dentro de main_category, podemos decir que la categoría que influye de manera más positiva al éxito de un proyecto es Dance.  
+
+A modo de nota, se ha probado a introducir la variable country, pero empeoraba el modelo considerablemente, el AIC pasaba a superar los 3700. Además de que todos los p-values para las distintas variables dummy creadas para representar los distintos países estaban por encima de 0.05.
+
+#### Comparación de las predicciones con las observaciones   
+
+Para conocer un poco más del modelo crearemos la matriz de confusión y veremos qué porcentaje de observaciones de entrenamiento es capaz de clasificar correctamente el modelo.
+
+```{r, message=FALSE, warning=FALSE}
+predicciones <- ifelse(test = modelLogistic$fitted.values > 0.5, yes = 1, no = 0)
+# predicciones
+matriz_confusion <- table(modelLogistic$model$status, predicciones,
+                           dnn = c("observaciones", "predicciones"))
+matriz_confusion
+```
+
+El modelo es capaz de clasificar correctamente ((1854 + 836) / (1854 + 836 + 232 + 78)) = 0.8966, es decir, el 89.66% de las observaciones de entrenamiento, por lo que se puede considerar bueno.
+
+#### Predicción  
+
+A continuación, vamos a aplicar nuestro modelo para predecir que probabilidad tiene de ser exitoso un proyecto que pertenece a la categoría Music, cuya duración va a ser de 30 y cuyo objetivo monetario serán 10,000€. Ya que el número de mecenas no se sabe hasta que el proyecto no ha finalizado, vamos a calcularlo para 5 valores distintos (20, 40, 60, 80, 100). 
+
+```{r}
+predict(modelLogistic, data.frame(main_category = 'Dance', proyect_length = 30,
+                                  backers = seq(from = 20, to = 100, by = 20),
+                                  euros_goal = 10000), type ="response")
+```
+
+La probabilidad, expresada en porcentaje para los valores mencionados anteriormente iría desde 33.49% si hay 20 backers a un 95.57% si los backers son 100. 
+
+# Representación de los resultados  
+
+- Visualización predictiva de la variable del éxito de un proyecto en base a la variable proyect_length  
+
+```{r}
+dataSet$status <- as.character(dataSet$status)
+dataSet$status <- as.numeric(dataSet$status)
+
+plot(status ~ proyect_length, dataSet, col = "darkblue",
+     main = "Modelo regresión logística",
+     ylab = "P(status=1|proyect_length)",
+     xlab = "proyect_length", pch = "I")
+
+curve(predict(modelLogisticSimple, data.frame(proyect_length = x), type = "response"),
+      col = "firebrick", lwd = 2.5, add = TRUE)
+```
+
+- Visualización predictiva de la variable del éxito de un proyecto en base a las variables main_category, proyect_length, backers y euros_goal. La variable main_category será Dance, la longitud del proyecto será 30 días. Luego la variable backers tomará valores de 10 a 150 de 10 en 10 y por último para la variable euros goal se han propuesto los valores 1000, 5000, 10000, 20000 y 50000.  
+
+```{r}
+require(gridExtra)
+newdata <- data.frame(proyect_length = c(rep(30, 100)),
+                       backers = rep(seq(from = 10, to = 200, by = 10), 5),
+                       main_category=c(rep('Dance', 100)),
+                       euros_goal=c(rep(1000, 20), rep(5000, 20), rep(10000, 20), 
+                                   rep(20000, 20), rep(50000, 20)))
+                      
+successPrediction <- predict(modelLogistic, newdata, type="response")
+goalPrediction <- as.factor(c(rep(1000, 20), rep(5000, 20), rep(10000, 20),
+                     rep(20000, 20), rep(50000, 20)))
+backersTotal <- rep(seq(from = 10, to = 200, by = 10), 5)
+predictionDataFrame <- data.frame(goalPrediction, successPrediction, backersTotal)
+
+# Gráfica para la categoría Dance
+plot1 <- ggplot(predictionDataFrame, aes(x = backersTotal, y = successPrediction,
+                                col = goalPrediction))+geom_point()+geom_line()+
+                                ylab('Éxito') + xlab('Backers')
+
+# Gráfica para la categoría Games
+newdata$main_category <- c(rep('Games', 100))
+successPrediction <- predict(modelLogistic, newdata, type="response")
+predictionDataFrame <- data.frame(goalPrediction, successPrediction, backersTotal)
+plot2 <- ggplot(predictionDataFrame, aes(x = backersTotal, y = successPrediction,
+                                col = goalPrediction))+geom_point()+geom_line()+
+                                ylab('Éxito') + xlab('Backers')
+
+# Gráfica para longitud de proyecto 60 días
+newdata$proyect_length <- c(rep(60, 100))
+successPrediction <- predict(modelLogistic, newdata, type="response")
+predictionDataFrame <- data.frame(goalPrediction, successPrediction, backersTotal)
+plot3 <- ggplot(predictionDataFrame, aes(x = backersTotal, y = successPrediction,
+                                col = goalPrediction))+geom_point()+geom_line()+
+                                ylab('Éxito') + xlab('Backers')
+grid.arrange(plot1, plot2, plot3, ncol = 1)
+```
+
+Podemos observar como a medida que aumenta la cantidad de mecenas la probabilidad de que el proyecto consiga recaudar el goal propuesta aumenta. Dependiendo de dicho goal, se necesitarán más backers o menos para que la probabilidad aumenta más deprisa. Por ejemplo, si el goal propuesto son 5000€, con apenas 50 backers la probabilidad llegaría al 87%, sin embargo, si el goal son 10000, con los 50 backers de antes la probabilidad estaría en torno al 70%. Vemos también que cuando el objetivo está muy por encima de la media de la variable euros_goal (26,803) la curva de subida no es tan pronunciada.
+
+Al cambiar la categoría observamos que la probabilidad de éxito disminuye, es decir, se necesitan más mecenas por proyecto para que el proyecto sea exitoso. Y lo mismo ocurre si la duración del proyecto se alarga hasta los 60 días.
+
+# Conclusiones  
+
+Se ha conseguido crear un modelo que predice que probabilidad tiene un proyecto de conseguir el objetivo monetario propuesto en base a la categoría en la que se incluye el proyecto, la longitud de este, el goal fijado y los mecenas. Cierto es que los mecenas del proyecto es imposible conocerlos de antemano, pero se pueden estimar ciertos valores que nos ayudarán a saber qué cantidad de backers necesitaremos para que nuestro proyecto sea exitoso. 
+
+Claramente la categoría a la que pertenece el mismo es un factor que influye en gran medida al igual que el goal propuesto. Se puede ver en las gráficas que a partir de cierto goal la probabilidad disminuye muchísimo. 
+
+De entrada, se puede pensar que a más días dure el proyecto mejor, más probabilidad de conseguir mecenas y llegar al objetivo, pero claramente, mediante los modelos y las graa2áficas se puede observar que esto no es así, sino todo lo contrario. 
+
+
+# Agradecimientos  
 
 En primer lugar, agradecer y reconocer el trabajo de Mickaël Mouillé **[enalce]**(https://www.kaggle.com/kemical), creador del dataset por trabajo para recolectar datos durante tantos años y publicarlos para el uso público.
 
 También agradecer a todas aquellas personas que han publicado sus dudas sobre el dataset para beneficio de todos.
 
-# Tabla de contribuciones
+# Tabla de contribuciones  
 
 | Contribuciones               |      Firma    |
 |------------------------------|:-------------:|
