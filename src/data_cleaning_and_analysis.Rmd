@@ -247,7 +247,7 @@ Una vez el procesado de los datos ha finalizado, se genera un archivo csv con no
 
 ```{r, message=FALSE, warning=FALSE}
 # Exportación de los datos limpios en .csv
-# write.csv(dataSet, '../data/ks-projects-201801_sample_clean.csv')
+write.csv(dataSet, '../data/ks-projects-201801_sample_clean.csv')
 dataSet <- read.csv('../data/ks-projects-201801_sample_clean.csv')
 attach(dataSet)
 ```
