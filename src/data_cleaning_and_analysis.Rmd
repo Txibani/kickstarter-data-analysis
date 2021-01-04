@@ -19,9 +19,9 @@
 # Descripción del dataset  
 
 Se ha decidido utilizar un dataset de la web Kaggle para la presente práctica. **[enlace]**(https://www.kaggle.com/kemical/kickstarter-projects)
-8 de la web Kickstarter. Kickstarter es una plataforma de micro mecenazgo, es decir, gente de todo el mundo ayuda a financiar las ideas y proyectos de pequeñas empresas o particulares.
+Kickstarter es una plataforma de micro mecenazgo, es decir, gente de todo el mundo ayuda a financiar las ideas y proyectos de pequeñas empresas o particulares.
 
-En la web de Kickstarter se pueden encontrar miles de campañas que buscan financiación para desarrollar productos de todo tipo. Desde películas independientes, a juegos de mesa o ropa, peluches, libros etc. Cada una de estas campañas tendrá un periodo de tiempo en el que cualquiera podrá aportar dinero al proyecto y si se consigue llegar al límite de dinero requerido la campaña será fundada.
+En la web de Kickstarter **[enlace]**(https://www.kickstarter.com/) se pueden encontrar miles de campañas que buscan financiación para desarrollar productos de todo tipo. Desde películas independientes, a juegos de mesa o ropa, peluches, libros etc. Cada una de estas campañas tendrá un periodo de tiempo en el que cualquiera podrá aportar dinero al proyecto y si se consigue llegar al objetivo de dinero propuesto la campaña será fundada.
 
 Yo personalmente utilicé Kickstarter hace unos años para lanzar una serie de productos lo cual es una de las razones por las que he elegido el presente dataset. El objetivo principal sería poder crear un modelo que predijera que probabilidad tiene cualquier tipo de producto de conseguir recaudar dinero mediante una campaña de Kickstarter antes de ser lanzado.  
 
@@ -54,9 +54,7 @@ nrow(dataSet)
 names(dataSet)
 ```
 
-Vemos que el dataset original se compone de 378,661 muestras y 13 variables. Ya que se trata de una cantidad de muestras muy elevadas, se ha decidido aplicar una técnica para reducir la cantidad de estas, se empleará la técnica de muestreo aleatorio simple sin sustitución, es decir, se van a extraer 3000 muestras aleatorias del conjunto de datos, donde la probabilidad de escoger cada una de las muestras será la misma para todas, 1/378,661.
-
-Para ello generaremos un fichero al que llamaremos sample_ks.csv que contendrá las 3000 muestras.
+Vemos que el dataset original se compone de 378,661 muestras y 15 variables. Ya que se trata de una cantidad de muestras muy elevadas, se ha decidido aplicar una técnica para reducir la cantidad de estas, se empleará la técnica de muestreo aleatorio simple sin sustitución, es decir, se van a extraer 3000 muestras aleatorias del conjunto de datos, donde la probabilidad de escoger cada una de las muestras será la misma para todas, 1/378,661.
 
 ```{r}
 library(sampling)
@@ -90,6 +88,7 @@ dataSet$category <- as.factor(dataSet$category)
 dataSet$main_category <- as.factor(dataSet$main_category)
 dataSet$currency <- as.factor(dataSet$currency)
 dataSet$country <- as.factor(dataSet$country)
+dataSet$state <- as.factor(dataSet$state)
 
 # Valores que toman las variables currency y country
 unique(dataSet$currency)
@@ -119,20 +118,24 @@ dataSet$usd_pledged_real <- as.numeric(dataSet$usd_pledged_real)
 dataSet$usd_goal_real <- as.numeric(dataSet$usd_goal_real)
 ```
 
-- La variable state, como ya se ha explicado, detalla el estado en el que acabó o estaba en ese momento la campaña. Vemos que hay 5 estados failed, successful, canceled, suspended y undefined. Ya que undefined no está detallado que significa, se ha decidido añadir una nueva columna status, que contendrá dos valores, 0 si el proyecto no ha sido fundado y 1 si el proyecto ha recaudado los fondos suficientes.  
+- La variable state, como ya se ha explicado, detalla el estado en el que acabó o estaba en ese momento la campaña. Vemos que hay 5 estados failed, successful, canceled, suspended y undefined. Se ha decidido añadir una nueva columna status, que contendrá dos valores, 0 si el proyecto no ha sido fundado y 1 si el proyecto ha recaudado los fondos suficientes. Esta nueva variable se creará comprobando si el dinero recaudado para el proyecto es superior al goal propuesto y si el estado de dicha muestra es distinto de live o undefined, es decir, es un proyecto que ya ha terminado. Si no se hace esta comprobación el modelo final no será tan preciso ya que se puede dar el caso en el que un proyecto que esté live no haya conseguido llegar al objetivo todavía, pero puede que termine siendo exitoso.
 
 ```{r, message=FALSE, warning=FALSE}
-dataSet['status'] <- as.factor(ifelse(dataSet$pledged > dataSet$goal, 1, 0))
+dataSet['status'] <- as.factor(
+  ifelse(
+    (dataSet$pledged > dataSet$goal) &
+    (dataSet$state != 'live' | dataSet$state != 'undefined'),
+         1, 0))
 ```
 
-- Se va a añadir una columna nueva euros_pledged que contendrá la conversión de usd_pledged_real a euros. Se utilizará la conversión 1€ = 1.23$ a 19 de diciembre.
+- Se va a añadir una columna nueva euros_pledged que contendrá la conversión de usd_pledged_real a euros. Se utilizará la conversión 1€ = 1.23$ a 4 de enero de 2021.
 
 ```{r, message=FALSE, warning=FALSE}
 dataSet['euros_pledged'] <- as.numeric(
   format(as.numeric(dataSet$usd_pledged_real)/1.23), nsmall = 1)
 ```
 
-- Se va a añadir una columna nueva euros_goal que contendrá la conversión de goal a euros. Se utilizará la conversión 1€ = 1.23$ a 19 de diciembre.
+- Se va a añadir una columna nueva euros_goal que contendrá la conversión de goal a euros. Se utilizará la conversión 1€ = 1.23$ a 4 de enero de 2021.
 
 ```{r, message=FALSE, warning=FALSE}
 dataSet['euros_goal'] <- round(as.numeric(
@@ -173,23 +176,14 @@ tail(sort(dataSet$proyect_length), 10)
 
 Vemos que hay bastante diferencia entre la media de la variable pledged y los valores más altos, pero haciendo un poco de investigación online se ha encontrado que algún proyecto ha llegado a recaudar más de 20,000,000\$, **[enlace]**(https://www.marketwatch.com/story/10-kickstarter-products-that-raised-the-most-money-2017-06-22-10883052). Por este motivo se ha decidido aceptar dichos outliers y tratarlos como datos válidos.
 
-Por otro lado, para la variable proyect_length vemos que el valor máximo de esta son 16,739 días, lo que corresponde a más de 3 años, implicaría que un proyecto ha estado recaudando fondos durante todo ese tiempo. Haciendo un poco de investigación sobre la normativa de Kickstarter, se ha encontrado **[enlace]**(https://help.kickstarter.com/hc/en-us/articles/115005128434-What-is-the-maximum-project-duration-#:~:text=Projects%20on%20Kickstarter%20can%20last,at%2030%20days%20or%20less.) que, hoy en día, la duración máxima por proyecto es de 60 días. También en este otro artículo de explica que hasta el año 2011 la duración máxima era de 90 días **[enlace]**(https://www.kickstarter.com/blog/shortening-the-maximum-project-length).  
+Haciendo un poco de investigación sobre la normativa de Kickstarter, se ha encontrado **[enlace]**(https://help.kickstarter.com/hc/en-us/articles/115005128434-What-is-the-maximum-project-duration-#:~:text=Projects%20on%20Kickstarter%20can%20last,at%2030%20days%20or%20less.) que, hoy en día, la duración máxima por proyecto es de 60 días. También en este otro artículo de explica que hasta el año 2011 la duración máxima era de 90 días **[enlace]**(https://www.kickstarter.com/blog/shortening-the-maximum-project-length).  
+
+Por ello se ha decidido que cualquier duración significativamente mayor de 90 días se va a tratar como outlier y se reemplazará por NA para posteriormente imputarlo con un valor de 90.
 
 ```{r, message=FALSE, warning=FALSE}
-outliersDays <- tail(sort(dataSet$proyect_length), 7)
-outliersDays
-indexes <- which(dataSet$proyect_length %in% outliersDays)
-indexes
-dataSet$launched[indexes]
-```
-
-Al comprobar el valor launchdate para cada una de las muestras en las que se encontraban los outliers vemos que la fecha es 1970-01-01 01:00:00, se han recogido mal al guardar los datos, de ahí que salgan valores tan extremos para proyect_length.
-
-Por todo ello se ha decidido que cualquier duración significativamente mayor de 90 días se va a tratar como outlier y se reemplazará por NA para posteriormente imputarlo con un valor de 90.
-
-```{r, message=FALSE, warning=FALSE}
-# Se reemplazan los valores en las posiciones indexes por NA
-dataSet$proyect_length[indexes] <- NA
+dataSet$proyect_length <- ifelse(dataSet$proyect_length > 90, NA, dataSet$proyect_length)
+index <- which(is.na(dataSet$proyect_length))
+index
 ```
 
 Muestra de todos las variables y sus valores NA's.  
@@ -204,10 +198,10 @@ sapply(dataSet, function(x) sum(is.na(x)))
 - Cómo se ha mencionado anteriormente los valores NA de la variable proyect_length se van a reemplazar por 90 ya que es el máximo número de días que un proyecto puede estar recaudando dinero.  
 
 ```{r, message=FALSE, warning=FALSE}
-dataSet$proyect_length[indexes] <- 90
+dataSet$proyect_length[index] <- 90
 ```
 
-- Imputación de valores perdidos para la variable country.  
+- Imputación de valores perdidos para la variable country en base a la variable currency.  
 
 ```{r, message=FALSE, warning=FALSE}
 idx <- which(is.na(dataSet$country))
@@ -254,7 +248,6 @@ Una vez el procesado de los datos ha finalizado, se genera un archivo csv con no
 ```{r, message=FALSE, warning=FALSE}
 # Exportación de los datos limpios en .csv
 # write.csv(dataSet, '../data/ks-projects-201801_sample_clean.csv')
-
 dataSet <- read.csv('../data/ks-projects-201801_sample_clean.csv')
 attach(dataSet)
 ```
@@ -273,7 +266,7 @@ unique(main_category)
 
 - proyect_length: tiempo de duración de cada proyecto, expresado en días.  
 
-- euros_pledged: conversión a € de la variable usd_pledged_real.
+- euros_goal: conversión a € de la variable goal.
 
 - country: país en el que se publicó el proyecto Kickstarter. La variable currency representa la moneda de dicho país por lo que nos resulta redundante.
 
@@ -291,33 +284,33 @@ Se va a utilizar el test Shapiro-Wilk, asumiendo un intervalo de confianza del 9
 
 ```{r, message=FALSE, warning=FALSE}
 shapiro.test(proyect_length)
-shapiro.test(euros_pledged)
+shapiro.test(euros_goal)
 shapiro.test(backers)
 
 # Representación de la distribución
 par(mfrow=c(2,2))
 qqnorm(proyect_length)
-qqnorm(euros_pledged)
+qqnorm(euros_goal)
 qqnorm(backers)
 ```
 
-Se puede apreciar que los datos no siguen una distribución normal ya que en el total de las comprobaciones el p-valor del Test de Shapiro-Wilk el p-value < 2.2e-16 rechazando dicha distribución normal.  
+Se puede apreciar que los datos no siguen una distribución normal ya que en el total de las comprobaciones el p-valor del Test de Shapiro-Wilk el p-value < 2.2e-16 además que visualemnte se se puede corroborar esto, por lo tanto podemos decir que las variables no siguen una distribución normal.  
 
 - Test de homocedasticidad
 
-Ya que hemos comprobado que nuestros datos no siguen una distribución normal (p-value < 2.2e-16 en todos los casos), para el test de homocedasticidad tendremos utilizaremos el de Fligner-Killeen. La hipótesis nula asume la igualdad de varianzas, por lo que p-values inferiores al nivel de significancia (0.05), indicarán heterocedasticidad.
+Ya que hemos comprobado que nuestros datos no siguen una distribución normal (p-value < 2.2e-16 en todos los casos), para el test de homocedasticidad utilizaremos el test de Fligner-Killeen. La hipótesis nula asume la igualdad de varianzas, por lo que p-values inferiores al nivel de significancia (0.05), indicarán heterocedasticidad.
 
 Para ello comprobaremos distintos grupos de datos entre sí:  
 
 ```{r, message=FALSE, warning=FALSE}
-fligner.test(proyect_length ~ euros_pledged, data = dataSet)
-fligner.test(euros_pledged ~ backers, data = dataSet)
+fligner.test(proyect_length ~ euros_goal, data = dataSet)
+fligner.test(euros_goal ~ backers, data = dataSet)
 fligner.test(proyect_length ~ backers, data = dataSet)
 ```
 
-De este análisis podemos observar dos casos, para las variables proyect_length-euros_pledged y proyect_length-backers el test de Fligner-Killen da un p-value mayor que 0.05 (1 y 0.942 respectivamente), por lo que se asume homocedasticidad.
+De este análisis podemos observar dos casos, para las variables proyect_length-euros_goal y proyect_length-backers el test de Fligner-Killen da un p-value mayor que 0.05 (0.951 y 0.9997 respectivamente), por lo que se asume homocedasticidad.
 
-Por otro lado, la prueba para euros_pledged y backers se resuelve con un p-value < 2.2e-16, por lo que en este caso si se puede rechazar la hipótesis nula de homocedasticidad y se concluye que la variable euros_pledged presenta varianzas estadísticamente diferentes para los diferentes grupos de backers.  
+Por otro lado, la prueba para euros_goal y backers se resuelve con un p-value 1.105e-13, por lo que en este caso si se puede rechazar la hipótesis nula de homocedasticidad y se concluye que la variable euros_goal presenta varianzas estadísticamente diferentes para los diferentes grupos de backers.  
 
 ## Pruebas estadísticas  
 
@@ -364,7 +357,7 @@ round(predict(modelLogisticSimple, data.frame(proyect_length = 45), type="respon
 round(predict(modelLogisticSimple, data.frame(proyect_length = 60), type="response"), 2)
 ```
 
-Podemos dar por cierto la afirmación de que a maa2ás largo el proyecto menos probabilidad de éxito hay ya que hemos obtenido que, para los proyectos de 25 días hay un 39% de probabilidad, para los de 45 días un 30% y para los de 60 días un 23%, se aprecia la tendencia a la baja.  
+Podemos dar por cierto la afirmación de que a maa2ás largo el proyecto menos probabilidad de éxito hay ya que hemos obtenido que, para los proyectos de 25 días hay un 40% de probabilidad, para los de 45 días un 27% y para los de 60 días un 20%, se aprecia la tendencia a la baja.  
 
 ### Modelo de regresión logística múltiple  
 
@@ -378,7 +371,6 @@ Vamos a especificar el nivel base de referencia para la variable cualitativa:
 ```{r, message=FALSE, warning=FALSE}
 status <- as.factor(status)
 main_category <- as.factor(main_category)
-class(euros_goal)
 
 # Nivel de referencia
 main_category <- relevel(main_category, ref = 'Dance')
@@ -392,11 +384,11 @@ exp(coefficients(modelLogistic))
 exp(confint.default(modelLogistic, level = 0.95))
 ```
 
-Observando el sumario del modelo podemos decir que las variables backers, proyect_length y euros_goal son significativas al tener p-values menores que el nivel de significancia 0.05 (< 2e-16 y 2.47e-08 respectivamente). La variable proyect_length, como ya sabíamos afecta de forma negativa al éxito del proyecto. Por otra parte, la variable backers afecta a al éxito del proyecto de manera positiva 0.0469. La variable euros_goal (objetivo económico marcado al que se tiene que llegar antes de que se termine la campaña), afecta de forma negativa a razón de 0.0002. 
+Observando el sumario del modelo podemos decir que las variables backers, proyect_length y euros_goal son significativas al tener p-values menores que el nivel de significancia 0.05 (< 2e-16, 0.000587 y < 2e-16 respectivamente). La variable proyect_length, como ya sabíamos afecta de forma negativa al éxito del proyecto con un coeficiente asociado igual a -1.605e-02. Por otra parte, la variable backers afecta a al éxito del proyecto de manera positiva 3.895e-02. La variable euros_goal (objetivo económico marcado al que se tiene que llegar antes de que se termine la campaña), afecta de forma negativa a razón de 2.472e-04. 
 
 En cuanto a la variable main_category, hemos definido antes que el nivel de referencia es 'Dance', si nos fijamos en los OR (odds-ratio) vemos que para el resto las categorías el OR está por debajo de la unidad, lo que indica que es menos probable que un proyecto sea éxitos si pertenece a cualquier otra categoría que si pertenece a Dance.
 
-Cuanto más se aleja el valor del odds-ratio de la unidad, más fuerte es la relación entre la variable dependiente e independiente, por ello vemos que los más alejados de la unidad corresponden a categoría Games (0.038). Si calculamos la inversa tenemos que para Technology 1/0.038 = 26.31, esto se podría interpretar como, si el proyecto pertenece a la categoría Dance, los odds de éxito son 26.31 veces mayor que si pertenece a la categoría Games.
+Cuanto más se aleja el valor del odds-ratio de la unidad, más fuerte es la relación entre la variable dependiente e independiente, por ello vemos que los más alejados de la unidad corresponden a categoría Games (0.168). Si calculamos la inversa tenemos que para Technology 1/0.168 = 5.952, esto se podría interpretar como, si el proyecto pertenece a la categoría Dance, los odds de éxito son 5.952 veces mayor que si pertenece a la categoría Games.
 
 Basándonos en el intervalo de confianza de las tres variables independientes podemos decir que la que más impacto tiene sobre el éxito del proyecto es main_category, es decir, la categoría en la que encuentra el proyecto. Y dentro de main_category, podemos decir que la categoría que influye de manera más positiva al éxito de un proyecto es Dance.  
 
@@ -414,25 +406,25 @@ matriz_confusion <- table(modelLogistic$model$status, predicciones,
 matriz_confusion
 ```
 
-El modelo es capaz de clasificar correctamente ((1854 + 836) / (1854 + 836 + 232 + 78)) = 0.8966, es decir, el 89.66% de las observaciones de entrenamiento, por lo que se puede considerar bueno.
+El modelo es capaz de clasificar correctamente ((1896 + 770) / (1896 + 770 + 262 + 72)) = 0.8886, es decir, el 88.86% de las observaciones de entrenamiento, por lo que se puede considerar bueno.
 
 #### Predicción  
 
 A continuación, vamos a aplicar nuestro modelo para predecir que probabilidad tiene de ser exitoso un proyecto que pertenece a la categoría Music, cuya duración va a ser de 30 y cuyo objetivo monetario serán 10,000€. Ya que el número de mecenas no se sabe hasta que el proyecto no ha finalizado, vamos a calcularlo para 5 valores distintos (20, 40, 60, 80, 100). 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 predict(modelLogistic, data.frame(main_category = 'Dance', proyect_length = 30,
                                   backers = seq(from = 20, to = 100, by = 20),
                                   euros_goal = 10000), type ="response")
 ```
 
-La probabilidad, expresada en porcentaje para los valores mencionados anteriormente iría desde 33.49% si hay 20 backers a un 95.57% si los backers son 100. 
+La probabilidad, expresada en porcentaje para los valores mencionados anteriormente iría desde 13.85% si hay 20 backers a un 78.39% si los backers son 100. 
 
 # Representación de los resultados  
 
 - Visualización predictiva de la variable del éxito de un proyecto en base a la variable proyect_length  
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 dataSet$status <- as.character(dataSet$status)
 dataSet$status <- as.numeric(dataSet$status)
 
@@ -447,7 +439,7 @@ curve(predict(modelLogisticSimple, data.frame(proyect_length = x), type = "respo
 
 - Visualización predictiva de la variable del éxito de un proyecto en base a las variables main_category, proyect_length, backers y euros_goal. La variable main_category será Dance, la longitud del proyecto será 30 días. Luego la variable backers tomará valores de 10 a 150 de 10 en 10 y por último para la variable euros goal se han propuesto los valores 1000, 5000, 10000, 20000 y 50000.  
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 require(gridExtra)
 newdata <- data.frame(proyect_length = c(rep(30, 100)),
                        backers = rep(seq(from = 10, to = 200, by = 10), 5),
@@ -464,7 +456,7 @@ predictionDataFrame <- data.frame(goalPrediction, successPrediction, backersTota
 # Gráfica para la categoría Dance
 plot1 <- ggplot(predictionDataFrame, aes(x = backersTotal, y = successPrediction,
                                 col = goalPrediction))+geom_point()+geom_line()+
-                                ylab('Éxito') + xlab('Backers')
+                                ylab('Éxito category Dance') + xlab('Backers')
 
 # Gráfica para la categoría Games
 newdata$main_category <- c(rep('Games', 100))
@@ -472,7 +464,7 @@ successPrediction <- predict(modelLogistic, newdata, type="response")
 predictionDataFrame <- data.frame(goalPrediction, successPrediction, backersTotal)
 plot2 <- ggplot(predictionDataFrame, aes(x = backersTotal, y = successPrediction,
                                 col = goalPrediction))+geom_point()+geom_line()+
-                                ylab('Éxito') + xlab('Backers')
+                                ylab('Éxito category Games') + xlab('Backers')
 
 # Gráfica para longitud de proyecto 60 días
 newdata$proyect_length <- c(rep(60, 100))
@@ -480,11 +472,12 @@ successPrediction <- predict(modelLogistic, newdata, type="response")
 predictionDataFrame <- data.frame(goalPrediction, successPrediction, backersTotal)
 plot3 <- ggplot(predictionDataFrame, aes(x = backersTotal, y = successPrediction,
                                 col = goalPrediction))+geom_point()+geom_line()+
-                                ylab('Éxito') + xlab('Backers')
+                                ylab('Éxito category Games') + xlab('Backers')
 grid.arrange(plot1, plot2, plot3, ncol = 1)
-```
 
-Podemos observar como a medida que aumenta la cantidad de mecenas la probabilidad de que el proyecto consiga recaudar el goal propuesta aumenta. Dependiendo de dicho goal, se necesitarán más backers o menos para que la probabilidad aumenta más deprisa. Por ejemplo, si el goal propuesto son 5000€, con apenas 50 backers la probabilidad llegaría al 87%, sin embargo, si el goal son 10000, con los 50 backers de antes la probabilidad estaría en torno al 70%. Vemos también que cuando el objetivo está muy por encima de la media de la variable euros_goal (26,803) la curva de subida no es tan pronunciada.
+```
+&nbsp;  
+Podemos observar como a medida que aumenta la cantidad de mecenas la probabilidad de que el proyecto consiga recaudar el goal propuesto aumenta. Dependiendo de dicho goal, se necesitarán más backers o menos para que la probabilidad aumenta más deprisa. Por ejemplo, si el goal propuesto son 5000€, para la categoría Dance, con apenas 50 backers la probabilidad llegaría al 70%, sin embargo, si el goal son 10000, con los 50 backers de antes la probabilidad estaría en torno al 38%. Vemos también que cuando el objetivo está muy por encima de la media de la variable euros_goal la curva de subida no es tan pronunciada.
 
 Al cambiar la categoría observamos que la probabilidad de éxito disminuye, es decir, se necesitan más mecenas por proyecto para que el proyecto sea exitoso. Y lo mismo ocurre si la duración del proyecto se alarga hasta los 60 días.
 
@@ -494,14 +487,14 @@ Se ha conseguido crear un modelo que predice que probabilidad tiene un proyecto 
 
 Claramente la categoría a la que pertenece el mismo es un factor que influye en gran medida al igual que el goal propuesto. Se puede ver en las gráficas que a partir de cierto goal la probabilidad disminuye muchísimo. 
 
-De entrada, se puede pensar que a más días dure el proyecto mejor, más probabilidad de conseguir mecenas y llegar al objetivo, pero claramente, mediante los modelos y las graa2áficas se puede observar que esto no es así, sino todo lo contrario. 
+De entrada, se puede pensar que a más días dure el proyecto mejor, más probabilidad de conseguir mecenas y llegar al objetivo, pero claramente, mediante los modelos y las gráficas se puede observar que esto no es así, sino todo lo contrario. 
 
 
 # Agradecimientos  
 
 En primer lugar, agradecer y reconocer el trabajo de Mickaël Mouillé **[enalce]**(https://www.kaggle.com/kemical), creador del dataset por trabajo para recolectar datos durante tantos años y publicarlos para el uso público.
 
-También agradecer a todas aquellas personas que han publicado sus dudas sobre el dataset para beneficio de todos.
+También agradecer a todas aquellas personas que han publicado sus dudas sobre el dataset en beneficio de todos.
 
 # Tabla de contribuciones  
 
